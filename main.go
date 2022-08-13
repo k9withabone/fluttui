@@ -1,9 +1,23 @@
 package main
 
-import "github.com/k9withabone/fluttui/tui"
+import (
+	"fmt"
+	"os"
+	"os/exec"
+
+	"github.com/k9withabone/fluttui/tui"
+)
 
 func main() {
-	// TODO: check if flutter is installed, exit if not
+	_, err := exec.LookPath("flutter")
+	if err != nil {
+		fmt.Println(
+			"Error: could not locate `flutter`.",
+			"\nPlease make sure `flutter` is installed and",
+			"available in your PATH before using this tool.",
+		)
+		os.Exit(1)
+	}
 
 	tui.StartTea()
 }
