@@ -16,13 +16,19 @@ import (
 
 var (
 	selectedStyle   = lipgloss.NewStyle().
-	                  PaddingRight(1).
+	                  PaddingRight(2).
 					  Border(lipgloss.RoundedBorder(), true).
-					  BorderForeground(constants.FlutterSky).
+					  BorderForeground(lipgloss.AdaptiveColor{
+						Light: string(constants.FlutterBlue),
+						Dark: string(constants.FlutterSky),
+					  }).
 	                  Margin(1, 1, 1, 0)
 	unselectedStyle = selectedStyle.Copy().
-	                  BorderForeground(constants.FlutterBlue).
-	                  Faint(true)
+	                  BorderForeground(lipgloss.AdaptiveColor{
+						Light: "#C4DFFF",
+						Dark: string(constants.FlutterNavy),
+					  }).
+	                  Foreground(lipgloss.AdaptiveColor{Light: "242", Dark: "245"})
 )
 
 type keyMap struct {
@@ -209,7 +215,7 @@ func (m Model) View() string {
 	return constants.ViewStyle.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
 		constants.PromptStyle.Render("Confirm Flutter Project Options"),
-		lipgloss.JoinHorizontal(lipgloss.Top, options, confirm),
+		lipgloss.JoinHorizontal(lipgloss.Top, confirm, options),
 		m.help.View(m.keyMap),
 	))
 }
