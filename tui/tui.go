@@ -34,42 +34,21 @@ func StartTea() {
 		androidLang: "kotlin",
 		confirmVisited: false,
 	}
-	m.setPage(templateSelect)
+	m.setPage(constants.Pages["templateSelect"])
 	if err := tea.NewProgram(m).Start(); err != nil {
 		fmt.Printf("There was an error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-const (
-	templateSelect = iota
-	nameInput
-	directoryInput
-	descriptionInput
-	orgInput
-	platformSelect
-	overwriteSelect
-
-	confirmation
-
-	// advanced options
-	pubGetSelect
-	iosLangSelect
-	androidLangSelect
-
-	running
-)
-
-type sessionPage int
-
 type confrimOptions struct {
 	optionsSelected bool
-	chooseSelected  int
+	pageSelected    int
 	confirmChoice   int
 }
 
 type mainModel struct {
-	page           sessionPage
+	page           int
 	currentModel   tea.Model
 	confirmVisited bool
 	confrimOptions confrimOptions
@@ -104,34 +83,33 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentModel = nil
 			return m, tea.Quit
 		}
-		if m.page < running {
+		if m.page < constants.Pages["running"] {
 			var err error
 			switch {
-			case m.confirmVisited && m.page != confirmation &&
+			case m.confirmVisited && m.page != constants.Pages["confirmation"] &&
 			     (key.Matches(msg, constants.Keys.Back) ||
 				  key.Matches(msg, constants.Keys.Next)):
 				// go back to confirmation page if it has already
 				// been visited and quit was not pressed
-				cmd, err = m.setPage(confirmation)
+				cmd, err = m.setPage(constants.Pages["confirmation"])
 	
-			case key.Matches(msg, constants.Keys.Back) && m.page <= confirmation:
+			case key.Matches(msg, constants.Keys.Back) &&
+			     m.page <= constants.Pages["confirmation"]:
 				// go to previous page if at confirmation or before
 				cmd, err = m.setPage(m.page - 1)
 	
-			case key.Matches(msg, constants.Keys.Next) && m.page < confirmation:
+			case key.Matches(msg, constants.Keys.Next) &&
+			     m.page < constants.Pages["confirmation"]:
 				// go to next page if before confirmation
 				cmd, err = m.setPage(m.page + 1)
 
-			case key.Matches(msg, constants.Keys.Next) && m.page == confirmation:
+			case key.Matches(msg, constants.Keys.Next) &&
+			     m.page == constants.Pages["confirmation"]:
 				// on confirmation page "next" key selects options to edit
 				// or confirms the options and starts flutter create
 				model := m.currentModel.(confirm.Model)
 				if model.OptionsSelected {
-					pageSelected := model.ChooseSelected
-					if pageSelected >= confirmation {
-						pageSelected++
-					}
-					cmd, err = m.setPage(sessionPage(pageSelected))
+					cmd, err = m.setPage(model.PageSelected)
 				} else {
 					if model.ConfirmChoice == 1 {
 						// no confirm, shift focus to options
@@ -140,7 +118,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						// options confirmed
 						cmd, m.cmdString = m.getFlutterCreateCmd()
-						runCmd, _ = m.setPage(running)
+						runCmd, _ = m.setPage(constants.Pages["running"])
 					}
 				}
 			}
@@ -171,79 +149,97 @@ func (m mainModel) View() string {
 	return ""
 }
 
-func (m *mainModel) setPage(page sessionPage) (tea.Cmd, error) {
+func (m *mainModel) setPage(page int) (tea.Cmd, error) {
 	var err error
 	var cmd tea.Cmd
+
+	if page == constants.Pages["platformSelect"] &&
+	   m.template != "app" &&
+	   m.template != "plugin" &&
+	   m.template != "plugin_ffi" {
+		if page > m.page {
+			page++
+		} else {
+			page--
+		}
+	}
 
 	if m.currentModel != nil {
 		// get entered info from the current page
 		switch m.page {
-		case templateSelect:
+		case constants.Pages["templateSelect"]:
 			m.template = m.currentModel.(choose.Model).Choices[0]
+			if m.template != "app" &&
+			   m.template != "plugin" &&
+			   m.template != "plugin_ffi" {
+				m.platforms = []string{}
+			} else if m.confirmVisited && len(m.platforms) == 0 {
+				page = constants.Pages["platformSelect"]
+			}
 		
-		case nameInput:
+		case constants.Pages["nameInput"]:
 			m.name = m.currentModel.(input.Model).Text
 		
-		case directoryInput:
+		case constants.Pages["directoryInput"]:
 			m.directory = m.currentModel.(input.Model).Text
 		
-		case descriptionInput:
+		case constants.Pages["descriptionInput"]:
 			m.description = m.currentModel.(input.Model).Text
 		
-		case orgInput:
+		case constants.Pages["orgInput"]:
 			m.org = m.currentModel.(input.Model).Text
 		
-		case platformSelect:
+		case constants.Pages["platformSelect"]:
 			m.platforms = m.currentModel.(choose.Model).Choices
 		
-		case overwriteSelect:
+		case constants.Pages["overwriteSelect"]:
 			m.overwrite = m.currentModel.(overwrite.Model).Overwrite
 		
-		case confirmation:
+		case constants.Pages["confirmation"]:
 			model := m.currentModel.(confirm.Model)
 			m.confrimOptions.optionsSelected = model.OptionsSelected
-			m.confrimOptions.chooseSelected = model.ChooseSelected
+			m.confrimOptions.pageSelected = model.PageSelected
 			m.confrimOptions.confirmChoice = model.ConfirmChoice
 			constants.Keys.Next.SetHelp("enter", "confirm")
 		
-		case pubGetSelect:
+		case constants.Pages["pubGetSelect"]:
 			m.pubGet = m.currentModel.(pubget.Model).Choice
 		
-		case iosLangSelect:
+		case constants.Pages["iosLangSelect"]:
 			m.iosLang = m.currentModel.(ioslang.Model).Choice
 		
-		case androidLangSelect:
+		case constants.Pages["androidLangSelect"]:
 			m.androidLang = m.currentModel.(androidlang.Model).Choice
 		}
 	}
 
 	// set currentModel to apropriate model for new page
 	switch page {
-	case templateSelect:
+	case constants.Pages["templateSelect"]:
 		m.currentModel, err = template.New(m.template)
 	
-	case nameInput:
+	case constants.Pages["nameInput"]:
 		m.currentModel, cmd, err = name.New(m.name)
 	
-	case directoryInput:
+	case constants.Pages["directoryInput"]:
 		m.currentModel, cmd, err = directory.New(m.directory, m.name)
 	
-	case descriptionInput:
+	case constants.Pages["descriptionInput"]:
 		m.currentModel, cmd, err = description.New(m.description)
 	
-	case orgInput:
+	case constants.Pages["orgInput"]:
 		m.currentModel, cmd, err = org.New(m.org, m.name)
 	
-	case platformSelect:
+	case constants.Pages["platformSelect"]:
 		m.currentModel, err = platforms.New(m.platforms)
 	
-	case overwriteSelect:
+	case constants.Pages["overwriteSelect"]:
 		m.currentModel = overwrite.New(m.overwrite)
 	
-	case confirmation:
+	case constants.Pages["confirmation"]:
 		constants.Keys.Next.SetHelp("enter", "select")
 		m.confirmVisited = true
-		m.currentModel, err = confirm.New(confirm.Options{
+		m.currentModel, err = confirm.New(confirm.Config{
 			Template: m.template,
 			Name: m.name,
 			Directory: m.directory,
@@ -256,20 +252,20 @@ func (m *mainModel) setPage(page sessionPage) (tea.Cmd, error) {
 			AndroidLang: m.androidLang,
 
 			OptionsSelected: m.confrimOptions.optionsSelected,
-			ChooseSelected: m.confrimOptions.chooseSelected,
+			PageSelected: m.confrimOptions.pageSelected,
 			ConfirmChoice: m.confrimOptions.confirmChoice,
 		})
 	
-	case pubGetSelect:
+	case constants.Pages["pubGetSelect"]:
 		m.currentModel = pubget.New(m.pubGet)
 	
-	case iosLangSelect:
+	case constants.Pages["iosLangSelect"]:
 		m.currentModel = ioslang.New(m.iosLang)
 	
-	case androidLangSelect:
+	case constants.Pages["androidLangSelect"]:
 		m.currentModel = androidlang.New(m.androidLang)
 	
-	case running:
+	case constants.Pages["running"]:
 		m.currentModel, cmd = run.New(m.cmdString)
 	}
 
@@ -286,11 +282,11 @@ func (m *mainModel) getFlutterCreateCmd() (tea.Cmd, string) {
 		cmdArgs = append(cmdArgs, m.directory, "--project-name", m.name)
 	}
 
-	cmdArgs = append(
-		cmdArgs,
-		"-t", m.template,
-		"--platforms", strings.Join(m.platforms, ","),
-	)
+	cmdArgs = append(cmdArgs, "-t", m.template)
+
+	if len(m.platforms) != 0 {
+		cmdArgs = append(cmdArgs, "--platforms", strings.Join(m.platforms, ","))
+	}
 
 	if m.description != "" {
 		cmdArgs = append(cmdArgs, "--description", m.description)

@@ -51,7 +51,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	}
 }
 
-type Options struct {
+type Config struct {
 	Template    string
 	Name        string
 	Directory   string
@@ -64,74 +64,141 @@ type Options struct {
 	AndroidLang string
 
 	OptionsSelected bool
-	ChooseSelected  int
+	PageSelected    int
 	ConfirmChoice   int
 }
 
+type option struct {
+	label    string
+	value    string
+	page     int
+	position int
+}
+
 type Model struct {
+	options      []option
 	choose       choose.Model
 	choosebutton choosebutton.Model
 	help         help.Model
 	keyMap       keyMap
 
 	OptionsSelected bool
-	ChooseSelected  int
+	PageSelected    int
 	ConfirmChoice   int
 }
 
-func New(options Options) (Model, error) {
-	itemLabels := []string{
-		"Template:",
-		"Name:",
-		"Directory:",
-		"Description:",
-		"Orginization:",
-		"Platforms:",
-		"Overwrite:",
-		"pub get:",
-		"iOS Language:",
-		"Android Language: ",
+func New(config Config) (Model, error) {
+	options := []option{
+		{
+			label: "Template: ",
+			value: config.Template,
+			page: constants.Pages["templateSelect"],
+		},
+		{
+			label: "Name: ",
+			value: config.Name,
+			page: constants.Pages["nameInput"],
+		},
+		{
+			label: "Directory: ",
+			value: config.Directory,
+			page: constants.Pages["directoryInput"],
+		},
+		{
+			label: "Description: ",
+			value: config.Description,
+			page: constants.Pages["descriptionInput"],
+		},
+		{
+			label: "Orginization: ",
+			value: config.Org,
+			page: constants.Pages["orgInput"],
+		},
 	}
 
-	itemLabelsBlock := lipgloss.JoinVertical(lipgloss.Left, itemLabels...)
+	if len(config.Platforms) != 0 {
+		options = append(options, option{
+			label: "Platforms: ",
+			value: strings.Join(config.Platforms, ","),
+			page: constants.Pages["platformSelect"],
+		})
+	}
 
 	overwriteOption := "No"
-	if options.Overwrite {
+	if config.Overwrite {
 		overwriteOption = "Yes"
 	}
 
 	pubGetOption := "Yes"
-	switch options.PubGet {
+	switch config.PubGet {
 	case pubget.PubGetOffline:
 		pubGetOption = "Offline"
 	case pubget.PubGetNo:
 		pubGetOption = "No"
 	}
 
-	itemOptions := []string{
-		options.Template,
-		options.Name,
-		options.Directory,
-		options.Description,
-		options.Org,
-		strings.Join(options.Platforms, ","),
-		overwriteOption,
-		pubGetOption,
-		options.IosLang,
-		options.AndroidLang,
+	options = append(
+		options,
+		option{
+			label: "Overwrite: ",
+			value: overwriteOption,
+			page: constants.Pages["overwriteSelect"],
+		},
+		option{
+			label: "pub get: ",
+			value: pubGetOption,
+			page: constants.Pages["pubGetSelect"],
+		},
+	)
+
+	var platformIos, platformAndroid bool
+	for _, platform := range config.Platforms {
+		if platform == "ios" {
+			platformIos = true
+		} else if platform == "android" {
+			platformAndroid = true
+		}
 	}
 
-	itemOptionsBlock := lipgloss.JoinVertical(lipgloss.Left, itemOptions...)
+	if platformIos {
+		options = append(options, option{
+			label: "iOS Language: ",
+			value: config.IosLang,
+			page: constants.Pages["iosLangSelect"],
+		})
+	}
+
+	if platformAndroid {
+		options = append(options, option{
+			label: "Android Language: ",
+			value: config.AndroidLang,
+			page: constants.Pages["androidLangSelect"],
+		})
+	}
+
+	var labels []string
+	var values []string
+	var selected int
+	for i, option := range options {
+		labels = append(labels, option.label)
+		values = append(values, option.value)
+		if option.page == config.PageSelected {
+			selected = i
+		}
+	}
+
+	labelsBlock := lipgloss.JoinVertical(lipgloss.Left, labels...)
+	valuesBlock := lipgloss.JoinVertical(lipgloss.Left, values...)
 
 	items := strings.Split(
-		lipgloss.JoinHorizontal(lipgloss.Top, itemLabelsBlock, itemOptionsBlock),
+		lipgloss.JoinHorizontal(lipgloss.Top, labelsBlock, valuesBlock),
 		"\n",
 	)
 
 	choose, err := choose.New(choose.Options{
 		Title: "Options",
 		Items: items,
-		Selected: []int{options.ChooseSelected},
+		Selected: []int{selected},
 		Limit: true,
 		DisableHelp: true,
 	})
@@ -140,7 +207,7 @@ func New(options Options) (Model, error) {
 	}
 
 	choosebutton := choosebutton.New(choosebutton.Options{
-		Choice: options.ConfirmChoice,
+		Choice: config.ConfirmChoice,
 		Prompt: "Confirm Options",
 		Items: []string{"Yes", "No"},
 		DisableHelp: true,
@@ -148,11 +215,12 @@ func New(options Options) (Model, error) {
 	})
 
 	return Model{
+		options: options,
 		choose: choose,
 		choosebutton: choosebutton,
 		help: help.New(),
 		keyMap: keyMap{
-			optionsSelected: options.OptionsSelected,
+			optionsSelected: config.OptionsSelected,
 			additionalShortHelpKeys: func(optionsSelected bool) []key.Binding {
 				if optionsSelected {
 					return choose.List.ShortHelp()
@@ -164,9 +232,9 @@ func New(options Options) (Model, error) {
 				key.WithHelp("tab", "switch"),
 			),
 		},
-		OptionsSelected: options.OptionsSelected,
-		ChooseSelected: options.ChooseSelected,
-		ConfirmChoice: options.ConfirmChoice,
+		OptionsSelected: config.OptionsSelected,
+		PageSelected: config.PageSelected,
+		ConfirmChoice: config.ConfirmChoice,
 	}, nil
 }
 
@@ -192,8 +260,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.choosebutton, cmd = m.choosebutton.Update(msg)
 	}
 
-	m.ChooseSelected = m.choose.List.Index()
-	m.ConfirmChoice  = m.choosebutton.Choice
+	m.PageSelected  = m.options[m.choose.List.Index()].page
+	m.ConfirmChoice = m.choosebutton.Choice
 
 	return m, cmd
 }

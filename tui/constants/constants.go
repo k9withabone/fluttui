@@ -60,4 +60,23 @@ var (
                   Padding(0, 1)
 
 	ViewStyle   = lipgloss.NewStyle().Padding(1, 0, 0, 2)
+
+	Pages = map[string]int{
+		"templateSelect": 0,
+		"nameInput": 1,
+		"directoryInput": 2,
+		"descriptionInput": 3,
+		"orgInput": 4,
+		"platformSelect": 5,
+		"overwriteSelect": 6,
+
+		"confirmation": 7,
+
+		// advanced options
+		"pubGetSelect": 8,
+		"iosLangSelect": 9,
+		"androidLangSelect": 10,
+
+		"running": 11,
+	}
 )
